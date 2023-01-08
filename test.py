@@ -1,5 +1,6 @@
 from pyparsing import Or
 from tomlkit import integer
+from adam import adam
 import numpy as np
 import pandas as pd
 import scipy.special
@@ -305,6 +306,7 @@ beam_combinations()
 num_list = [[[0, 2, 4, 6], [1, 3, 5, 7]]]
 # num_list = [[[0], [1, 2, 3, 4, 5, 6, 7]]]
 
+
 CNI_list = list()
 max_CNI = list()
 
@@ -316,7 +318,7 @@ for num in range(len(num_list)) :
         if freqField.get(iter) is None:
             freqField[iter] = list()
 
-    add_beam(num, plot = True)
+    add_beam(num, plot = False)
     
     beam_CNI = dBm(np.array(dbb))
     CNI_mean = dBm(np.array(dbb).mean())
@@ -329,9 +331,6 @@ for num in range(len(num_list)) :
 
 for listed in range(len(CNI_list)) :
     max_CNI.append(CNI_list[listed][2])
-# print(max(max_CNI))
-
-    # print()
 
 # print(len(freqField[0][0][0][0]))  # longitude
 # print(len(freqField[0][0][0]))     # latitude
@@ -343,57 +342,3 @@ for listed in range(len(CNI_list)) :
 # freqField[repeated_beam][ビーム数][gb, xy][latitude][longitude]
 plt.show()
 
-
-
-
-#最適化アルゴリズム
-class Adam:
-    # インスタンス変数を定義
-    def __init__(self, lr=0.001, beta1=0.9, beta2=0.999):
-        self.lr = lr        # 学習率
-        self.beta1 = beta1  # mの減衰率
-        self.beta2 = beta2  # vの減衰率
-        self.iter = 0       # 試行回数を初期化
-        self.m = None       # モーメンタム
-        self.v = None       # 適合的な学習係数
-    
-    # パラメータの更新メソッドを定義
-    def updateW(self, params, grads, W):
-
-        # mとvを初期化
-        if self.m is None: # 初回のみ
-            self.m = {}
-            self.v = {}
-
-            for key, val in params.items():
-                self.m[key] = np.zeros_like(val) # 全ての要素が0
-                self.v[key] = np.zeros_like(val) # 全ての要素が0
-        
-        # パラメータごとに値を更新
-        self.iter += 1 # 更新回数をカウント
-        lr_t  = self.lr * np.sqrt(1.0 - self.beta2 ** self.iter) / (1.0 - self.beta1 ** self.iter) 
-
-        for key in params.keys():
-            
-            self.m[key] = self.beta1 * self.m[key] + (1 - self.beta1) * grads[key]
-            self.v[key] = self.beta2 * self.v[key] + (1 - self.beta2) * (grads[key] ** 2)
-            ss = params[key] - lr_t * self.m[key] / (np.sqrt(self.v[key]) + 1e-7)
-
-            # elif ss < 0:
-            if ss < 0:
-                params[key] *=  0.1
-
-            else:
-                params[key] = ss
-
-            if sum(params.values()) < W:
-                am = W - sum(params.values())
-
-                for key in params.keys():                
-                    params[key] +=  am / len(params.values())
-
-            elif sum(params.values()) > W:
-                sa = sum(params.values()) - W
-
-                for key in params.keys():
-                    params[key] -= (params[key] / sum(params.values())) * sa # ここでparamsの値を更新
