@@ -12,17 +12,18 @@ from geopy.distance import geodesic
 #最適化アルゴリズム
 class adam:
     # インスタンス変数を定義
-    def __init__(self, lr=0.001, beta1=0.9, beta2=0.999):
-        self.lr = lr        # 学習率
-        self.beta1 = beta1  # mの減衰率
-        self.beta2 = beta2  # vの減衰率
-        self.iter = 0       # 試行回数を初期化
+    # def __init__(self, lr=0.001, beta1=0.9, beta2=0.999):
+    def __init__(self):
+        self.lr    = [0.001, 1000]  # 学習率
+        self.beta1 = 0.9    # mの減衰率
+        self.beta2 = 0.999  # vの減衰率
+        self.iter  = 0      # 試行回数を初期化
         self.m = None       # モーメンタム
         self.v = None       # 適合的な学習係数
     
-    # パラメータの更新メソッドを定義
-    def updateW(self, params, grads, W):
 
+    # パラメータの更新メソッドを定義
+    def update(self, params, grads, total, beam_user, char):
         # mとvを初期化
         if self.m is None: # 初回のみ
             self.m = {}
@@ -34,31 +35,48 @@ class adam:
         
         # パラメータごとに値を更新
         self.iter += 1 # 更新回数をカウント
-        lr_t  = self.lr * np.sqrt(1.0 - self.beta2 ** self.iter) / (1.0 - self.beta1 ** self.iter) 
+
+        if char == "power" :
+            lr_t  = self.lr[0] * np.sqrt(1.0 - self.beta2 ** self.iter) / (1.0 - self.beta1 ** self.iter) 
+        else :
+            lr_t  = self.lr[1] * np.sqrt(1.0 - self.beta2 ** self.iter) / (1.0 - self.beta1 ** self.iter) 
+
 
         for key in params.keys():
-            
             self.m[key] = self.beta1 * self.m[key] + (1 - self.beta1) * grads[key]
             self.v[key] = self.beta2 * self.v[key] + (1 - self.beta2) * (grads[key] ** 2)
             ss = params[key] - lr_t * self.m[key] / (np.sqrt(self.v[key]) + 1e-7)
+            
+            # paramsが0以下にならないようにする
 
-            # if ss < 0:
-            #     params[key] *=  0.1
+            if char == "power" :
+                if ss < 0.1:
+                    params[key] = 0.1
+                else:
+                    params[key] = ss
+            
+            else :
+                if ss < 100000:
+                    params[key] = 100000
+                else:
+                    params[key] = ss
 
-            # else:
-            #     params[key] = ss
+        # paramsの合計がtotalになるように調整
+        if sum(params.values()) < total:
+            am = total - sum(params.values())
 
-            if sum(params.values()) < W:
-                am = W - sum(params.values())
+            for key in params.keys():                
+                if char == "power" :
+                    params[key] +=  am * (beam_user[key] / sum(beam_user))
+                else :
+                    params[key] +=  am * (char[key] / sum(beam_user))
+            
 
-                for key in params.keys():                
-                    params[key] +=  am / len(params.values())
+        else :
+            sa = sum(params.values()) - total
 
-            elif sum(params.values()) > W:
-                sa = sum(params.values()) - W
-
-                for key in params.keys():
-                    params[key] -= (params[key] / sum(params.values())) * sa # ここでparamsの値を更新
-
-    def sample() :
-        print("sample")
+            for key in params.keys():
+                if char == "power" :
+                    params[key] -= sa * (beam_user[key] / sum(beam_user))
+                else :
+                    params[key] -= sa * (char[key] / sum(beam_user))
