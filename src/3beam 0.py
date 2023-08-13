@@ -8,6 +8,8 @@ import csv
 import os
 import time
 import datetime
+import torch
+from torch import optim
 from geopy.distance import geodesic
 from keras import optimizers
 
@@ -85,7 +87,7 @@ def result_output_num(iter, cni_mean, beam_bps, beam_cni_db, beam_bps_per_Hz, bp
         data = ["iter", "iter", "beam_num", "user", "power[W]", "bandwidth[Hz]", "beam_cni_db[dB]", "beam_bps_per_Hz", "bitrate[beam_bps]", "beam_bps/user", "latitude", "longitude", "sat_radius", "beam_radius", "freq"]
         writer.writerow(data)
         #      [iter, iter, beam_num, user          , power[W]           , bandwidth[Hz]          , beam_cni_db[dB], beam_bps_per_Hz , bitrate[beam_bps]]
-        data = [iter, ""  , ""      , sum(beam_user), sum(power), sum(bandwidth.values()), cni_mean       , bps_per_Hz      , sum(beam_bps)    ]
+        data = [iter, ""  , ""      , sum(beam_user), sum(power), sum(bandwidth), cni_mean       , bps_per_Hz      , sum(beam_bps)    ]
         writer.writerow(data)
 
         for beam_num in range(num_of_beam):
@@ -205,25 +207,28 @@ def initial_power():
     else:
         for beam_num in range(num_of_beam):
             # power[beam_num] = TOTAL_POWER / num_of_beam
-            power.append(TOTAL_POWER / num_of_beam)
+            power.append(torch.tensor(TOTAL_POWER / num_of_beam))
 
-    # print("power : ", power, "total : ", sum(power.values()))
+    # print("power : ", power, "total : ", sum(power))
     return power
 
 
 def initial_bandwidth():
     if random_param:
         for freq_num in range(REPEATED_BEAM):
-            bandwidth[freq_num] = np.random.rand()
+            # bandwidth[freq_num] = np.random.rand()
+            bandwidth.append(np.random.rand())
 
-        rand_total_bandwidth = sum(bandwidth.values())
+        rand_total_bandwidth = sum(bandwidth)
         for freq_num in range(REPEATED_BEAM):
             bandwidth[freq_num] = bandwidth[freq_num] * np.array(TOTAL_BANDWIDTH / rand_total_bandwidth)
     else:
         for freq_num in range(REPEATED_BEAM):
-            bandwidth[freq_num] = TOTAL_BANDWIDTH / REPEATED_BEAM
+            # bandwidth[freq_num] = TOTAL_BANDWIDTH / REPEATED_BEAM
+            bandwidth.append(torch.tensor(TOTAL_BANDWIDTH / REPEATED_BEAM))
 
-    # print("bandwidth : ", bandwidth, "total : ", sum(bandwidth.values()))
+
+    print("bandwidth : ", bandwidth, "total : ", sum(bandwidth))
     return bandwidth
 
 
@@ -312,17 +317,17 @@ def calc_cni(power, bandwidth):
         cni_in_beam      = list()
         cni_in_beam_dist = list()
 
-        iter = determ_freq(freq_beam_list, beam_num)
+        freq_num = determ_freq(freq_beam_list, beam_num)
         # freqField[REPEATED_BEAM][beam_num][gb, xy][latitude][longitude]
-        carrier = power[beam_num]*1000 * freqField[iter][beam_num][0] * mW(DOWNLINK_LOSS)
-        noise = (1.38 * 10**(-23)) * 316.3 * bandwidth[iter] * 1000
-        interference = np.zeros_like(carrier)
+        carrier = power[beam_num]*1000 * freqField[freq_num][beam_num][0] * mW(DOWNLINK_LOSS)
+        noise = (1.38 * 10**(-23)) * 316.3 * bandwidth[freq_num] * 1000
+        interference = torch.tensor(np.zeros_like(carrier))
 
         # ビーム数回繰り返す
         for i in range(num_of_beam):
             if i != beam_num:
                 # CI比を知りたいビーム以外のビームをノイズとして加算しまくる．
-                interference += power[i]*1000 * freqField[iter][i][0] * mW(DOWNLINK_LOSS)
+                interference += power[i]*1000 * freqField[freq_num][i][0] * mW(DOWNLINK_LOSS)
 
         # points_in_beam[len][x, y, dist]
         points_in_beam = mean_cni(beam_num, dBm(carrier))
@@ -520,7 +525,7 @@ if __name__ == '__main__':
     for num in range(start_num, end_num, 1):
 
         power               = list()
-        bandwidth           = dict()
+        bandwidth           = list()
         beam_center         = dict()
         beam_radius         = dict()
         sat_radius          = dict()
@@ -536,12 +541,6 @@ if __name__ == '__main__':
         # beam_opt_y          = adam()
         # radius_opt          = adam()
 
-        power_opt           = optimizers.Adam(learning_rate=0.1)
-        bandwidth_opt       = optimizers.Adam(learning_rate=0.1)
-        beam_opt_x          = optimizers.Adam(learning_rate=0.1)
-        beam_opt_y          = optimizers.Adam(learning_rate=0.1)
-        radius_opt          = optimizers.Adam(learning_rate=0.1)
-
         num_of_beam         = beam_count()
         freq_beam_list      = beam_freq()
 
@@ -549,6 +548,13 @@ if __name__ == '__main__':
         initial_bandwidth()
         initial_beam_radius()
         initial_sat_radius()
+
+        power_opt           = optim.Adam(power, lr=0.1)
+        bandwidth_opt       = optim.Adam(bandwidth, lr=0.1)
+        # beam_opt_x          = optim.Adam(power, lr=0.1)
+        # beam_opt_y          = optim.Adam(power, lr=0.1)
+        # radius_opt          = optim.Adam(power, lr=0.1)
+
 
         for iter in range(REPEATED_BEAM):
             if freqField.get(iter) is None:
@@ -580,27 +586,9 @@ if __name__ == '__main__':
             dist_from_center_x = dist_from_center[0]
             dist_from_center_y = dist_from_center[1]
 
-            if iter != 0:
-                # grads_power = df_power(power)
-                # power_opt.update_power(power, grads_power, TOTAL_POWER, beam_user, "power")
-                # power = normalize(power, sum(power.values()), TOTAL_POWER)
+            # if iter != 0:
 
-                # grads_bandwidth    = df_bandwidth(bandwidth)
-                # bandwidth_opt.update_bandwidth(bandwidth, grads_bandwidth, TOTAL_BANDWIDTH, beam_user, freq_user_list)
 
-                # grads_beam_x       = df_beam_x(beam_center)
-                # beam_opt_x.update_beam(beam_center, grads_beam_x)
-
-                # grads_beam_y       = df_beam_y(beam_center)
-                # beam_opt_y.update_beam(beam_center, grads_beam_y)
-
-                # grads_sat_radius  = df_sat_radius(sat_radius)
-                # radius_opt.update_sat_radius(sat_radius, grads_sat_radius)
-
-                power_opt.minimize()
-
-            else:
-                df_power(power)
 
             cni = calc_cni(power, bandwidth)[0]
             calc_bitrate(cni, iter, printf)
