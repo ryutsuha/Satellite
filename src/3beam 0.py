@@ -586,7 +586,11 @@ if __name__ == '__main__':
             dist_from_center_x = dist_from_center[0]
             dist_from_center_y = dist_from_center[1]
 
-            # if iter != 0:
+            if iter != 0:
+                power_opt.zero_grad()
+                power_loss = torch.tensor(calc_bitrate(np.array(calc_cni(power, bandwidth)[0]), np.nan, False))
+                power_loss.backward()
+                power_opt.step()
 
 
 

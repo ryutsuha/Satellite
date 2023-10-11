@@ -14,12 +14,8 @@ from geopy.distance import geodesic
 t = time.time()
 color  = list()
 colorlist = {"cl0" : "#888888", "cl1" : "#4FAAD1", "cl2" : "#EBBF00", "cl3" : "#B66427", "cl4" : "#0f4047"}
-pref_list = pd.read_csv("database\\jinko_list_sityoson.csv")
-
-sat_rad = 180
-beam_dist = int(sat_rad / 7.5)
-longitude = np.array(list(range(1280, 1465, beam_dist)))/10
-latitude = np.array(list(range(300, 460, beam_dist)))/10
+# pref_list = pd.read_csv("database\\jinko_list_sityoson.csv")
+pref_list = pd.read_csv("database\\jinko_list_sityoson_ships_airlines.csv")
 
 beam_center_all = list()
 beam_param = list()
@@ -68,14 +64,14 @@ def pref_beam_distance() :
             beam_center_dist_y[pref].append(geodesic(beam_center_all[beam_num], [pref_list['緯度'][pref], beam_center_all[beam_num][1]]).km)
             beam_center_dist[pref].append(np.sqrt(beam_center_dist_x[pref][beam_num] ** 2 + beam_center_dist_y[pref][beam_num] ** 2))
 
-            if beam_center_dist[pref][beam_num] <= beam_radius[beam_num] :
+            if beam_center_dist[pref][beam_num] <= beam_radius[beam_num]*3 :
                 beam_overlap +=1
 
         beam_overlap_list.append(beam_overlap)
 
         for beam_num in range(len(beam_center_all)) :
             
-            if beam_center_dist[pref][beam_num] <= beam_radius[beam_num] :
+            if beam_center_dist[pref][beam_num] <= beam_radius[beam_num]*3 :
                 center_dist_list.append([pref_list['自治体'][pref], int(pref_list['人口'][pref]),  beam_num, beam_overlap_list[pref], beam_center_dist_x, beam_center_dist_y])
 
     print("pref_beam_distanceおわり")
@@ -131,7 +127,7 @@ def output_pic() :
     plt.gca().yaxis.set_minor_locator(tick.MultipleLocator(1))
 
     for beam_num in range(len(beam_param)):
-        ax.add_patch(patches.Circle(xy=(beam_param[beam_num][1], beam_param[beam_num][0]), radius=beam_param[beam_num][2]/100, color=colorlist["cl" + str(beam_param[beam_num][3])], alpha=0.3))
+        ax.add_patch(patches.Circle(xy=(beam_param[beam_num][1], beam_param[beam_num][0]), radius=beam_param[beam_num][2]/100, color=colorlist["cl" + str(beam_param[beam_num][3])], alpha=0.225))
 
 
 def output_csv () :
@@ -152,12 +148,21 @@ def output_csv () :
         data = beam_param[beam_num]
         writer.writerow(data)
 
+sat_rad_list = [60]
 
-setup()
-# center_dist_list = pref_beam_distance()
-# user = user_count()
-user = [1] * len(beam_center_all)
-appen_beam_param()
+for _ in range(len(sat_rad_list)) :
+
+    sat_rad = sat_rad_list[_]
+    beam_dist = int(sat_rad / 7.5)
+    longitude = np.array(list(range(1280, 1465, beam_dist)))/10
+    latitude = np.array(list(range(300, 460, beam_dist)))/10
+
+    setup()
+    center_dist_list = pref_beam_distance()
+    user = user_count()
+    # user = [1] * len(beam_center_all)
+    appen_beam_param()
+
 output_pic()
 output_csv()
 
