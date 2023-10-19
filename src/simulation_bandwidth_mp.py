@@ -26,7 +26,7 @@ TOTAL_POWER      = 5                #[W]
 REPEATED_BEAM    = 3
 KAISU            = 100
 
-output_csv       = False
+output_csv       = True
 printf           = False
 random_param     = False
 cni_plot         = False
@@ -42,19 +42,16 @@ POINT_X = np.linspace(0, 1800, 91)              # 位置pにspc[0]のポイン�
 POINT_Y = np.linspace(0, 1800, 91)              # 位置pにspc[1]のポイント数だけサンプルする．
 mesh_x, mesh_y = np.meshgrid(POINT_X, POINT_Y)  # np.meshgrid()は，一次元配列2個を使って，座標をメッシュ状に展開する．
 
-
-if output_csv:
-    now = datetime.datetime.now()
-    output_time = now.strftime("%m%d-%H%M%S")
-    output_path = "Result\\Result_" + output_time
-    os.mkdir(output_path)
+output_time = 0
+output_path = 0
+process_num = 0
 
 
 def result_output_num(iter, cni_mean, beam_bps, beam_cni_db, beam_bps_per_Hz, bps_per_Hz):
     if not output_csv:
         return
 
-    filename = output_path + "\\result_all_" + str(num) + "km_" + output_time + ".csv"
+    filename = output_path + "\\result_all_" + str(num) + "km_" + output_time + "_" +  str(process_num) + ".csv"
     mode = 'w' if iter == 0 else 'a'
 
     with open(filename, mode, newline='') as f:
@@ -79,7 +76,7 @@ def result_output(iter, cni_mean, beam_bps, beam_cni_db, beam_bps_per_Hz, bps_pe
     if not output_csv:
         return
 
-    filename = output_path + "\\result_" + str(num) + "km" + output_time + ".csv"
+    filename = output_path + "\\result_" + str(num) + "km" + output_time + "_" +  str(process_num) + ".csv"
     mode = 'w' if iter == 0 else 'a'
 
     with open(filename, mode, newline='') as f:
@@ -94,14 +91,16 @@ def result_output(iter, cni_mean, beam_bps, beam_cni_db, beam_bps_per_Hz, bps_pe
 
 # 総ビーム数と各ビームの中心座標を返す(指定したビーム配置)
 def beam_count():
+    beam_center = list()
     for beam_num in range(len(circle)):
-        beam_center[beam_num] = ([circle["latitude"][beam_num], circle["longitude"][beam_num]])
+        beam_center.append([circle["latitude"][beam_num], circle["longitude"][beam_num]])
 
-    return len(circle)
+    return len(circle), beam_center
 
 
 # 市町村役場所在地から各ビームの中心までの距離を計算し､beam_radius[km]以内ならcenter_dist_listに追加して返す
 def pref_beam_distance():
+    center_dist_list = list()
 
     for pref in range(len(pref_list)): # 市町村の数(沖縄除く)
         beam_center_dist_x = [
@@ -139,32 +138,11 @@ def user_count():
 def beam_freq():
     freq_beam_list = [[0]] * REPEATED_BEAM
 
-    # for freq_num in range(REPEATED_BEAM):
-    #     freq_beam_list.append(list())
-
     for beam_num in range(num_of_beam):
         this_beam_freq = circle["color"][beam_num] - 1
         freq_beam_list[this_beam_freq].append(beam_num)
 
     return freq_beam_list
-
-
-# def initial_power():
-#     if random_param:
-#         for beam_num in range(num_of_beam):
-#             # power[beam_num] = np.random.rand()
-#             power.append(np.random.rand())
-
-#         rand_total_power = sum(power)
-#         for beam_num in range(num_of_beam):
-#             power[beam_num] = power[beam_num] * np.array(TOTAL_POWER / rand_total_power)
-#     else:
-#         for beam_num in range(num_of_beam):
-#             # power[beam_num] = TOTAL_POWER / num_of_beam
-#             power.append(TOTAL_POWER / num_of_beam)
-
-#     print("power : ", power, "total : ", sum(power))
-#     return power
 
 
 def initial_bandwidth():
@@ -179,57 +157,27 @@ def initial_bandwidth():
             bandwidth[freq_num] = bandwidth[freq_num] * np.array(TOTAL_BANDWIDTH / rand_total_bandwidth)
     else:
         bandwidth = [TOTAL_BANDWIDTH / REPEATED_BEAM] * REPEATED_BEAM
-        # for freq_num in range(REPEATED_BEAM):
-        #     # bandwidth[freq_num] = TOTAL_BANDWIDTH / REPEATED_BEAM
-        #     bandwidth.append(TOTAL_BANDWIDTH / REPEATED_BEAM)
 
-
-    print("bandwidth : ", bandwidth, "total : ", sum(bandwidth))
     return bandwidth
 
 
-# 各ビームの電力を総当りでリスト化する 今は他のプログラムに投げたので未使用
-# 参考 : https://drken1215.hatenablog.com/entry/2020/05/04/190252
-# def decision_power() :
-#     power_gradation = 32
-#     power_width     = TOTAL_POWER / power_gradation
-#     def dfs(A):
-#         # 数列の長さが beam_su に達したら打ち切り
-#         if len(A) == num_of_beam:
-            
-#             # 処理
-#             if sum(A) == TOTAL_POWER :
-#                 power_list.append(A.copy())
-#             return
-        
-#         for v in range(power_gradation+1):
-#             A.append(power_width * v if v != 0 else v)
-#             dfs(A)
-#             A.pop()
-
-#     dfs([])
-
-#     print(len(power_list))
-#     # for _ in power_list :
-#     #     print(_)
-
-
 def decision_power_from_csv() :
-    global power_list
     power_list = pd.read_csv("database\\decision_power_8_0927-115200.csv").values.tolist()
     return power_list
     
 
 def initial_beam_radius():
+    beam_radius = list()
     for beam_num in range(num_of_beam):
-        beam_radius[beam_num] = 60
+        beam_radius.append(60)
 
     return beam_radius
 
 
 def initial_sat_radius():
+    sat_radius = list()
     for beam_num in range(num_of_beam):
-        sat_radius[beam_num] = circle["sat_radius"][beam_num]  # 衛生アンテナの直径
+        sat_radius.append(circle["sat_radius"][beam_num])  # 衛生アンテナの直径
 
     return sat_radius
 
@@ -376,21 +324,15 @@ def calc_bitrate(cni, iter, printf):
     bps_per_Hz      = 0.2179 * cni_mean + 0.4387
 
     for beam_num in range(num_of_beam):  # 総ビーム数回
-        if beam_bps_per_Hz[beam_num] < 0:
-            beam_bps_per_Hz[beam_num] = 0
-
+        if beam_bps_per_Hz[beam_num] < 0: beam_bps_per_Hz[beam_num] = 0
         beam_bps.append(beam_bps_per_Hz[beam_num] * bandwidth[determ_freq(freq_beam_list, beam_num)])
 
     bps_person_list_num.append([num, freq_beam_list, iter, cni_mean, bps_per_Hz, sum(beam_bps), sum(beam_user)])
-
-    if printf:
-        print(f"num {num}, iter: {iter}, cni: {np.round(cni_mean, 12)}[dB], {bps_per_Hz}[bps/Hz], {sum(beam_bps):,}[bps], power : {power} band : {bandwidth}")
-
-        # for beam_num in range(num_of_beam):  # 総ビーム数回
-        #     print(f"beam {beam_num}: {np.round(power[beam_num], 6)}[W], cni = {np.round(beam_cni_db[beam_num], 3)}[dB], {beam_user[beam_num]}[人], {beam_bps_per_Hz[beam_num]}[beam_bps/Hz] * {np.round(bandwidth[determ_freq(freq_beam_list, beam_num)]):,}[Hz] = {np.round(beam_bps[beam_num]):,}[beam_bps], {beam_user[beam_num]}[人], {np.round(beam_center[beam_num], 9)}, {sat_radius[beam_num]}[m], {beam_radius[beam_num]}[km]")
-
-        result_output_num(iter, cni_mean, beam_bps, beam_cni_db, beam_bps_per_Hz, bps_per_Hz)
-        result_output(iter, cni_mean, beam_bps, beam_cni_db, beam_bps_per_Hz, bps_per_Hz)
+    result_output_num(iter, cni_mean, beam_bps, beam_cni_db, beam_bps_per_Hz, bps_per_Hz)
+    result_output(iter, cni_mean, beam_bps, beam_cni_db, beam_bps_per_Hz, bps_per_Hz)
+    
+    # if printf: print(f"num {num}, iter: {iter}, cni: {np.round(cni_mean, 12)}[dB], {bps_per_Hz}[bps/Hz], {sum(beam_bps):,}[bps], power : {power} band : {bandwidth}")
+    if printf: print(f"iter: {iter}, cni: {np.round(cni_mean, 3)}[dB], {np.round(bps_per_Hz, 3)}[bps/Hz], {sum(beam_bps):,}[bps], power : {power}")
 
     return beam_bps
 
@@ -402,81 +344,67 @@ def calc_bps_max(iter):
         return bps_person_max
 
 
+def main(start_end_list) :
+    global bps_person_max, power, process_num, output_time, output_path
+
+    if __name__ != '__main__':
+        process_num = start_end_list[2]
+        output_time = start_end_list[3]
+        output_path = start_end_list[4]
+
+    print(f'プロセス{process_num} 開始 : {setup_time}')
+
+    for iter in range(start_end_list[0], start_end_list[1]):
+        power = power_list[iter]
+        cni = calc_cni(power, bandwidth)[0]
+        calc_bitrate(cni, iter, printf)
+        bps_person_max = calc_bps_max(iter-start_end_list[0])
+
+    print(f"プロセス{process_num} 終了 : {time.time() - runtime}")
+    plt.show()
+
+
+
+
+num = 180
+circle  = pd.read_csv("database\\beam_list_" + str(num) + "km.csv")
+
+power               = list()
+freqField           = dict()   # 角周波数ごとにビームを入れる辞書
+bps_person_max      = [0] * 7
+bps_person_list_num = list()
+
+for iter in range(REPEATED_BEAM):
+    if freqField.get(iter) is None:
+        freqField[iter] = list()
+
+num_of_beam         = beam_count()[0]
+beam_center         = beam_count()[1]
+freq_beam_list      = beam_freq()
+power_list          = decision_power_from_csv()
+bandwidth           = initial_bandwidth()
+beam_radius         = initial_beam_radius()
+sat_radius          = initial_sat_radius()
+center_dist_list    = pref_beam_distance()
+
+dist_from_center    = add_beam(beam_center, sat_radius, plot=False)
+dist_from_center_x  = dist_from_center[0]
+dist_from_center_y  = dist_from_center[1]
+
+beam_user = np.round(np.array(user_count()) / 60)
+setup_time = time.time() - runtime
+
 if __name__ == '__main__':
-    # for num in [180, 120, 60, 45]:
-    for num in [180]:
 
-        circle  = pd.read_csv("database\\beam_list_" + str(num) + "km.csv")
-        print("database\\beam_list_" + str(num) + "km.csv")
+    if output_csv:
+        now         = datetime.datetime.now()
+        output_time = now.strftime("%m%d-%H%M%S")
+        output_path = "Result\\Result_" + output_time
+        os.mkdir(output_path)
 
-        power               = list()
-        bandwidth           = list()
-        beam_center         = dict()
-        beam_radius         = dict()
-        sat_radius          = dict()
-        power_list          = list()
 
-        center_dist_list    = list()
-        freqField           = dict()   # 角周波数ごとにビームを入れる辞書
-        bps_person_max      = [0] * 7
-        bps_person_list_num = list()
-
-        num_of_beam         = beam_count()
-        freq_beam_list      = beam_freq()
-
-        # initial_power()
-        # decision_power()
-        decision_power_from_csv()
-        initial_bandwidth()
-        initial_beam_radius()
-        initial_sat_radius()
-        pref_beam_distance()
-
-        for iter in range(REPEATED_BEAM):
-            if freqField.get(iter) is None:
-                freqField[iter] = list()
-
-        dist_from_center   = add_beam(beam_center, sat_radius, plot=False)
-        dist_from_center_x = dist_from_center[0]
-        dist_from_center_y = dist_from_center[1]
-
-        beam_user = np.round(np.array(user_count()) / 60)
-        setup_time = time.time() - runtime
-        print(f'開始時間 : {setup_time}')
-
-        # KAISU回学習
-        # for iter in range(1):
-        for iter in range(len(power_list)):
-            power = power_list[iter]
-
-            # freq_user_list = list()
-            # beam_user = np.round(np.array(user_count()) / 60)
-
-            # # 同じ周波数で通信しているビームのユーザ数の合計を計算
-            # for freq_num in range(REPEATED_BEAM):
-            #     freq_user = 0
-
-            #     for beam_num in range(num_of_beam):
-            #         if determ_freq(freq_beam_list, beam_num) == freq_num:
-            #             freq_user += beam_user[beam_num]
-
-            #     freq_user_list.append(freq_user)
-
-            # dist_from_center   = add_beam(beam_center, sat_radius, plot=cni_plot)
-            # dist_from_center_x = dist_from_center[0]
-            # dist_from_center_y = dist_from_center[1]
-
-            cni = calc_cni(power, bandwidth)[0]
-            calc_bitrate(cni, iter, printf)
-            bps_person_max = calc_bps_max(iter)
-            # print(f'{iter}回目の学習終わり Process={time.time() - runtime}')
-
-        print(f"実行時間 : {time.time() - runtime - setup_time}")
-        print(f"終了時間 : {time.time() - runtime}")
-        # result_output()
-        print()
-
-plt.show()
+    main([0, len(power_list), 0])
+    print(f"実行時間 : {time.time() - runtime - setup_time}")
 
 
 # print(len(freqField[0][0][0][0]))  # longitude
@@ -487,60 +415,3 @@ plt.show()
 
 # print(f"freqField[{len(freqField)}][{len(freqField[0])}][{len(freqField[0][0])}][{len(freqField[0][0][0])}][{len(freqField[0][0][0][0])}]")
 # freqField[REPEATED_BEAM][ビーム数][gb, xy][latitude][longitude]
-
-# # 都道府県庁所在地から各ビームの中心までの距離を計算し､beam_radius[km]以内ならcenter_dist_listに追加して返す
-# def pref_beam_distance_old():
-#     center_dist_list   = list()
-#     beam_center_dist   = list()
-#     beam_center_dist_x = list()
-#     beam_center_dist_y = list()
-#     beam_overlap_list  = list()
-
-#     for pref in range(len(pref_list)):  # 都道府県の数(沖縄除く)
-#         beam_center_dist_x.append(list())
-#         beam_center_dist_y.append(list())
-#         beam_center_dist.append(list())
-
-#     for pref in range(len(pref_list)):  # 都道府県の数(沖縄除く)
-#         beam_overlap = 0
-
-#         for beam_num in range(num_of_beam):
-#             # print(beam_num, beam_center[beam_num], [beam_center[beam_num][0]  , pref_list['県庁経度'][pref]])
-#             beam_center_dist_x[pref].append(geodesic(beam_center[beam_num], [beam_center[beam_num][0], pref_list['経度'][pref]]).km)
-#             beam_center_dist_y[pref].append(geodesic(beam_center[beam_num], [pref_list['緯度'][pref], beam_center[beam_num][1]]).km)
-#             beam_center_dist[pref].append(np.sqrt(beam_center_dist_x[pref][beam_num] ** 2 + beam_center_dist_y[pref][beam_num] ** 2))
-
-#             if beam_center_dist[pref][beam_num] <= beam_radius[beam_num]:
-#                 beam_overlap += 1
-
-#         beam_overlap_list.append(beam_overlap)
-
-#         for beam_num in range(num_of_beam):
-#             if beam_center_dist[pref][beam_num] <= beam_radius[beam_num]:
-#                 center_dist_list.append([pref_list['自治体'][pref], int(pref_list['人口'][pref]), beam_num, beam_overlap_list[pref], beam_center_dist_x, beam_center_dist_y])
-
-#     return center_dist_list
-
-
-# # 各ビームのユーザ数を計算して返す
-# def user_count_old():
-#     pref_user = list()
-#     beam_user = list()
-
-#     for i in range(len(center_dist_list)):
-#         # 各都道府県の人口を都道府県庁所在地がある場所の範囲内のビームの数だけ割って足す(1ユーザが2ビームで通信されないようにする)
-#         pref_user.append(center_dist_list[i][1] / center_dist_list[i][3])
-
-#     # 各ビームのユーザ数を計算
-#     for beam_num in range(num_of_beam):  # 総ビーム数回
-#         beam_user.append(0)
-
-#         for i in range(len(center_dist_list)):
-
-#             if beam_num == center_dist_list[i][2]:
-#                 beam_user[beam_num] += pref_user[i]
-
-#     for beam_num in range(num_of_beam):  # 総ビーム数回
-#         beam_user[beam_num] = round(beam_user[beam_num])
-    
-#     return beam_user
