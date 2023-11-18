@@ -145,7 +145,7 @@ def beam_freq():
     for beam_num in range(num_of_beam):
         this_beam_freq = circle["color"][beam_num] - 1
         freq_beam_list[this_beam_freq].append(beam_num)
-
+    
     return freq_beam_list
 
 

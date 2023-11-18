@@ -11,11 +11,11 @@ num_of_beam = 8
 TOTAL_POWER = 5
 power_list  = []
 
-POWER_GRADATION = 8
+POWER_GRADATION = 32
 power_width     = TOTAL_POWER / POWER_GRADATION
 
 isnewfile  = True
-output_csv = False
+output_csv = True
 filename = "database\\decision_power_" + str(POWER_GRADATION) + "_" + datetime.datetime.now().strftime("%m%d-%H%M%S") + ".csv"
 
 def printlen() :
@@ -23,7 +23,6 @@ def printlen() :
 
     if len(power_list) > 1 and len(power_list) % 1000 == 0 :
         print(len(power_list), time.time() - runtime)
-        print(isnewfile)
         result_output()
         power_list.clear()
 
