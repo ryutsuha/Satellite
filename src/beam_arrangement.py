@@ -14,10 +14,12 @@ from geopy.distance import geodesic
 t = time.time()
 color  = list()
 colorlist = {"cl0" : "#888888", "cl1" : "#4FAAD1", "cl2" : "#EBBF00", "cl3" : "#B66427", "cl4" : "#0f4047"}
-# pref_list = pd.read_csv("database\\jinko_list_sityoson.csv")
-pref_list = pd.read_csv("database\\jinko_list_sityoson_ships_airlines.csv")
+pref_list = pd.read_csv("database\\jinko_list_sityoson.csv")
+# pref_list = pd.read_csv("database\\jinko_list_sityoson_ships_airlines.csv")
+df = gpd.read_file('japan_eez.json')
 
-beam_center_all = list()
+
+beam_center = list()
 beam_param = list()
 beam_radius = list()
 beam_freq   = list()
@@ -27,13 +29,11 @@ def setup () :
     for lat in range(len(latitude)) :
         for lon in range(len(longitude)) :
             if lat % 2 == 0 :
-                beam_center_all.append([latitude[lat], longitude[lon]])
+                beam_center.append([latitude[lat], longitude[lon]])
             
             else :
-                beam_center_all.append([latitude[lat], longitude[lon] + beam_dist * 0.15])
+                beam_center.append([latitude[lat], longitude[lon] + beam_dist * 0.15])
             
-            this_color = lon % 3 + 1
-            # beam_freq.append("cl" + str(this_color))
             beam_freq.append(lon % 3 + 1)
             beam_radius.append(sat_rad)
 
@@ -43,36 +43,26 @@ def setup () :
 # 都道府県庁所在地から各ビームの中心までの距離を計算し､beam_radius[km]以内ならcenter_dist_listに追加して返す
 def pref_beam_distance() :
     center_dist_list = list()
-    beam_center_dist = list()
-    beam_center_dist_x = list()
-    beam_center_dist_y = list()
-    beam_overlap_list = list()
 
-    for pref in range(len(pref_list)) : # 都道府県の数(沖縄除く)
-        beam_center_dist_x.append(list())
-        beam_center_dist_y.append(list())
-        beam_center_dist.append(list())
-
-    for pref in range(len(pref_list)) : # 都道府県の数(沖縄除く)
-        beam_overlap = 0
+    for pref in range(len(pref_list)): # 市町村の数(沖縄除く)
         print("pref_beam_distance", pref)
+        beam_center_dist_x = [
+            geodesic(beam_center[beam_num], [beam_center[beam_num][0], pref_list['経度'][pref]]).km
+            for beam_num in range(len(beam_center))
+        ]
+        beam_center_dist_y = [
+            geodesic(beam_center[beam_num], [pref_list['緯度'][pref], beam_center[beam_num][1]]).km
+            for beam_num in range(len(beam_center))
+        ]
+        beam_center_dist = np.sqrt(np.array(beam_center_dist_x) ** 2 + np.array(beam_center_dist_y) ** 2)
+        beam_overlap_list = sum(1 for i, dist in enumerate(beam_center_dist) if dist <= beam_radius[i])
 
+        center_dist_list.extend([
+            [pref_list['自治体'][pref], int(pref_list['人口'][pref]), beam_num, beam_overlap_list, x, y]
+            for beam_num, x, y in zip(range(len(beam_center)), beam_center_dist_x, beam_center_dist_y)
+            if beam_center_dist[beam_num] <= beam_radius[beam_num]
+        ])
 
-        for beam_num in range(len(beam_center_all)) :
-            # print(beam_num, beam_center_all[beam_num], [beam_center_all[beam_num][0]  , pref_list['県庁経度'][pref]])
-            beam_center_dist_x[pref].append(geodesic(beam_center_all[beam_num], [beam_center_all[beam_num][0]  , pref_list['経度'][pref]]).km)
-            beam_center_dist_y[pref].append(geodesic(beam_center_all[beam_num], [pref_list['緯度'][pref], beam_center_all[beam_num][1]]).km)
-            beam_center_dist[pref].append(np.sqrt(beam_center_dist_x[pref][beam_num] ** 2 + beam_center_dist_y[pref][beam_num] ** 2))
-
-            if beam_center_dist[pref][beam_num] <= beam_radius[beam_num]*3 :
-                beam_overlap +=1
-
-        beam_overlap_list.append(beam_overlap)
-
-        for beam_num in range(len(beam_center_all)) :
-            
-            if beam_center_dist[pref][beam_num] <= beam_radius[beam_num]*3 :
-                center_dist_list.append([pref_list['自治体'][pref], int(pref_list['人口'][pref]),  beam_num, beam_overlap_list[pref], beam_center_dist_x, beam_center_dist_y])
 
     print("pref_beam_distanceおわり")
     return center_dist_list
@@ -88,7 +78,7 @@ def user_count() :
         pref_user.append(center_dist_list[i][1] / center_dist_list[i][3]) 
 
     # 各ビームのユーザ数を計算
-    for beam_num in range(len(beam_center_all)) : # 総ビーム数回
+    for beam_num in range(len(beam_center)) : # 総ビーム数回
         beam_user.append(0)
 
         for i in range(len(center_dist_list)):
@@ -96,7 +86,7 @@ def user_count() :
             if beam_num == center_dist_list[i][2] :
                 beam_user[beam_num] += pref_user[i]
     
-    for beam_num in range(len(beam_center_all)) : # 総ビーム数回
+    for beam_num in range(len(beam_center)) : # 総ビーム数回
         beam_user[beam_num] = round(beam_user[beam_num])
         print(beam_num, beam_user[beam_num])
     
@@ -105,15 +95,15 @@ def user_count() :
 
 
 def appen_beam_param() :
-    for beam_num in range(len(beam_center_all)) :
+    for beam_num in range(len(beam_center)) :
         if user[beam_num] != 0 :
-            beam_param.append([beam_center_all[beam_num][0], beam_center_all[beam_num][1], beam_radius[beam_num], beam_freq[beam_num], user[beam_num]])
-            print(beam_num,    beam_center_all[beam_num][0], beam_center_all[beam_num][1], beam_radius[beam_num], beam_freq[beam_num], user[beam_num])
+            beam_param.append([beam_center[beam_num][0], beam_center[beam_num][1], beam_radius[beam_num], beam_freq[beam_num], user[beam_num]])
+            print(beam_num,    beam_center[beam_num][0], beam_center[beam_num][1], beam_radius[beam_num], beam_freq[beam_num], user[beam_num])
 
 
 def output_pic() :
     fig, ax = plt.subplots(figsize = (10,10))
-    df = gpd.read_file('japan.geojson')
+    # df = gpd.read_file('japan.geojson')
     df.plot(ax = ax, edgecolor='#444', facecolor='white', linewidth = 0.5, aspect="equal")
 
     plt.scatter(128, 30, marker="+", color="black")
@@ -132,7 +122,7 @@ def output_pic() :
 
 def output_csv () :
     for beam_num in range(len(beam_param)):
-        # ax.add_patch(patches.Circle(xy=(beam_center_all[beam_num][1], beam_center_all[beam_num][0]), radius=beam_radius[beam_num]/100, color=colorlist["cl" + str(beam_freq[beam_num])], alpha=0.3))
+        # ax.add_patch(patches.Circle(xy=(beam_center[beam_num][1], beam_center[beam_num][0]), radius=beam_radius[beam_num]/100, color=colorlist["cl" + str(beam_freq[beam_num])], alpha=0.3))
         filename = 'beam_list.csv'
 
         if beam_num == 0 :
@@ -148,7 +138,7 @@ def output_csv () :
         data = beam_param[beam_num]
         writer.writerow(data)
 
-sat_rad_list = [60]
+sat_rad_list = [120]
 
 for _ in range(len(sat_rad_list)) :
 
@@ -160,7 +150,7 @@ for _ in range(len(sat_rad_list)) :
     setup()
     center_dist_list = pref_beam_distance()
     user = user_count()
-    # user = [1] * len(beam_center_all)
+    # user = [1] * len(beam_center)
     appen_beam_param()
 
 output_pic()

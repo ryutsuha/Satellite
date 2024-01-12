@@ -14,7 +14,7 @@ from geopy.distance import geodesic
 t = time.time()
 color  = list()
 colorlist = {"cl0" : "#888888", "cl1" : "#4FAAD1", "cl2" : "#EBBF00", "cl3" : "#B66427", "cl4" : "#0f4047"}
-pref_list = pd.read_csv("jinko_list_sityoson.csv")
+pref_list = pd.read_csv("database\\jinko_list_sityoson.csv")
 
 sat_rad = 250
 beam_dist = int(sat_rad / 7.5)

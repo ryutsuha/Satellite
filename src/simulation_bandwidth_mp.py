@@ -51,22 +51,22 @@ def result_output_num(iter, cni_mean, beam_bps, beam_cni_db, beam_bps_per_Hz, bp
     if not output_csv:
         return
 
-    filename = output_path + "\\result_all_" + str(num) + "km_" + output_time + "_" +  str(process_num) + "_" + str(iter_start) + "to" + str(iter_end) + ".csv"
-    mode = 'w' if iter == 0 else 'a'
+    filename = output_path + "\\result_all_" + str(num_of_beam) + "beam_" + output_time + "_" + str(process_num) +".csv"
+    mode = 'w' if iter == start_sat_radius else 'a'
 
     with open(filename, mode, newline='') as f:
         writer = csv.writer(f)
-        header = ["iter", "iter", "beam_num", "band", "power[W]", "bandwidth[Hz]", "beam_cni_db[dB]", "beam_bps_per_Hz", "bitrate[beam_bps]", "latitude", "longitude", "sat_radius", "beam_radius"]
+        header = ["iter", "iter", "beam_num", "band", "power[W]", "bandwidth[Hz]", "beam_cni_db[dB]", "beam_bps_per_Hz", "bitrate[beam_bps]", "latitude", "longitude", "sat_radius", "beam_radius", "user"]
         writer.writerow(header)
 
-        #      [iter, iter, beam_num, band, power[W]  , bandwidth[Hz] , beam_cni_db[dB], beam_bps_per_Hz , bitrate[beam_bps]]
-        data = [iter, ""  , ""      , ""  , sum(power), sum(bandwidth), cni_mean       , bps_per_Hz      , sum(beam_bps)    ]
+        #      ["iter", "iter", "beam_num", "band", "power[W]", "bandwidth[Hz]", "beam_cni_db[dB]", "beam_bps_per_Hz", "bitrate[beam_bps]", "latitude", "longitude", "sat_radius", "beam_radius", "user"]
+        data = [iter  , ""    , ""        , ""    , sum(power), sum(bandwidth) , cni_mean         , bps_per_Hz       , sum(beam_bps)      , ""        , ""         , ""          , ""           , sum(beam_user)]
         writer.writerow(data)
 
         for beam_num in range(num_of_beam):
             freq = determ_freq(freq_beam_list, beam_num)
-            #      [iter, iter, beam_num, band, power[W]       , bandwidth[Hz]  , beam_cni_db[dB]      , beam_bps_per_Hz          , bitrate[beam_bps] , latitude                , longitude               , sat_radius          , beam_radius          ]
-            data = [""  , iter, beam_num, freq, power[beam_num], bandwidth[freq], beam_cni_db[beam_num], beam_bps_per_Hz[beam_num], beam_bps[beam_num], beam_center[beam_num][0], beam_center[beam_num][1], sat_radius[beam_num], beam_radius[beam_num]]
+            #      [iter, iter, beam_num, band, power[W]       , bandwidth[Hz]  , beam_cni_db[dB]      , beam_bps_per_Hz          , bitrate[beam_bps] , latitude                , longitude               , sat_radius          , beam_radius          , user]
+            data = [""  , iter, beam_num, freq, power[beam_num], bandwidth[freq], beam_cni_db[beam_num], beam_bps_per_Hz[beam_num], beam_bps[beam_num], beam_center[beam_num][0], beam_center[beam_num][1], sat_radius[beam_num], beam_radius[beam_num], beam_user[beam_num]]
             writer.writerow(data)
 
         writer.writerow("")
@@ -76,16 +76,16 @@ def result_output(iter, cni_mean, beam_bps, beam_cni_db, beam_bps_per_Hz, bps_pe
     if not output_csv:
         return
 
-    filename = output_path + "\\result_" + str(num) + "km" + output_time + "_" +  str(process_num) + "_" + str(iter_start) + "to" + str(iter_end) + ".csv"
-    mode = 'w' if iter == 0 else 'a'
+    filename = output_path + "\\result_" + str(num_of_beam) + "beam_" + output_time + "_" + str(process_num) +".csv"
+    mode = 'w' if iter == start_sat_radius else 'a'
 
     with open(filename, mode, newline='') as f:
         writer = csv.writer(f)
-        if iter == 0:
-            header = ["iter", "power[W]", "bandwidth[Hz]", "cni[dB]", "bps_per_Hz", "bitrate[beam_bps]"]
+        if iter == start_sat_radius:
+            header = ["iter", "power[W]", "bandwidth[Hz]", "cni[dB]", "bps_per_Hz", "bitrate[beam_bps]", "user"]
             writer.writerow(header)
 
-        data = [iter, power, bandwidth, cni_mean, bps_per_Hz, sum(beam_bps)]
+        data = [iter, power, bandwidth, cni_mean, bps_per_Hz, sum(beam_bps), sum(beam_user)]
         writer.writerow(data)
 
 
@@ -149,6 +149,22 @@ def beam_freq():
     return freq_beam_list
 
 
+def initial_power():
+    global power
+    if random_param:
+        for beam_num in range(num_of_beam):
+            # power[beam_num] = np.random.rand()
+            power.append(np.random.rand())
+
+        rand_total_power = sum(power)
+        for beam_num in range(num_of_beam):
+            power[beam_num] = power[beam_num] * np.array(TOTAL_POWER / rand_total_power)
+    else:
+        power = [TOTAL_POWER / num_of_beam] * num_of_beam
+
+    return power
+
+
 def initial_bandwidth():
     global bandwidth
     if random_param:
@@ -163,14 +179,6 @@ def initial_bandwidth():
         bandwidth = [TOTAL_BANDWIDTH / REPEATED_BEAM] * REPEATED_BEAM
 
     return bandwidth
-    
-
-def initial_beam_radius():
-    beam_radius = list()
-    for beam_num in range(num_of_beam):
-        beam_radius.append(60)
-
-    return beam_radius
 
 
 def initial_sat_radius():
@@ -196,7 +204,7 @@ def mW(dBm_value):
     return 10 ** ((dBm_value)/10)
 
 
-def add_beam(beam_center, sat_radius, plot):
+def add_beam(beam_center, sat_radius):
 
     # freqField[REPEATED_BEAM][ビーム数][gb, xy][latitude][longitude]
     dist_from_center_x = list()
@@ -216,15 +224,6 @@ def add_beam(beam_center, sat_radius, plot):
             if i != iter:
                 freqField[i].append([0, [0, 0]])
 
-    if plot:
-        # cni_all[beam_num][y][x]
-        cni_all = calc_cni(power, bandwidth)[1]
-
-        for beam_num in range(num_of_beam):
-            iter = determ_freq(freq_beam_list, beam_num)
-            print(cni_all[beam_num], beam_num, iter)
-            plot_cni(cni_all[beam_num], beam_num, iter)
-
     return (dist_from_center_x, dist_from_center_y)
 
 
@@ -236,7 +235,7 @@ def beam_gain(freq, dist_from_center, beam_num, sat_radius):
     theta  = np.arctan2(np.sqrt(dist_x ** 2 + dist_y ** 2), SAT_DIST)   # 詳しくは中平先生の論文を参照．ビームのゲインを求めるために地上でのxy座標系から曲座標系に変換．
     s      = (np.pi * sat_radius[beam_num]) / lmd * np.sin(theta)       # 詳しくは中平先生の論文を参照．ビームのゲインを求めるために，式の共通項を求める．
 
-    return (2*scipy.special.jv(1, s) / (s + 1e-12)) ** 2                # 詳しくは中平先生の論文を参照．ビームのゲインを求めて返す．scipy.special.jv(n, s)は第nベッセル関数．
+    return (2*scipy.special.jv(1, s) / (s + 1e-12)) ** 2                # 詳しくは中平先生の論文を参照．ビームのゲインを求めて返す．scipy.special.jv(this_sat_radius, s)は第nベッセル関数．
                                                                         # 中平先生の論文にはベッセル関数の添字に1があったので，第一次ベッセル関数であると判断して本記述とした．
 
 
@@ -244,34 +243,38 @@ def beam_gain(freq, dist_from_center, beam_num, sat_radius):
 def calc_cni(power, bandwidth):
     cni_beam_avg = list()
     cni_all      = list()
+    beam_radius_def  = list()
+    carrier          = list()
+    interference     = list()
 
     for beam_num in range(num_of_beam):
         cni_in_beam      = list()
         cni_in_beam_dist = list()
 
         freq_num = determ_freq(freq_beam_list, beam_num)
-        carrier = power[beam_num]*1000 * freqField[freq_num][beam_num][0] * dl_mw   # freqField[REPEATED_BEAM][beam_num][gb, xy][latitude][longitude]
+        carrier.append(power[beam_num]*1000 * freqField[freq_num][beam_num][0] * dl_mw)   # freqField[REPEATED_BEAM][beam_num][gb, xy][latitude][longitude]
         noise = 4.3649399999999995e-18 * bandwidth[freq_num]                                    # (1.38 * 10**(-23)) * 316.3 * bandwidth[freq_num] * 1000
 
         # CI比を知りたいビーム以外のビームを干渉電力として加算しまくる．
-        interference = sum(
+        interference.append(sum(
             power[i] * 1000 * freqField[freq_num][i][0] * dl_mw
             for i in range(num_of_beam) if i != beam_num
-        )
+        ))
 
         # points_in_beam[len][x, y, dist]
-        points_in_beam = mean_cni(beam_num, dBm(carrier))
-        total_cni = carrier / (noise + interference)
+        points_in_beam = mean_cni(beam_num, dBm(carrier[beam_num]))
+        total_cni = carrier[beam_num] / (noise + interference[beam_num])
         cni_all.append(dBm(total_cni))
 
         for i in range(len(points_in_beam)):
             cni_in_beam.append(total_cni[points_in_beam[i][0]][points_in_beam[i][1]])
             cni_in_beam_dist.append(points_in_beam[i][2])
         
-        beam_radius[beam_num] = max(cni_in_beam_dist)
+        beam_radius_def.append(max(cni_in_beam_dist))
         cni_beam_avg.append(np.mean(cni_in_beam))
+    
 
-    return (cni_beam_avg, cni_all, beam_radius[beam_num])  # 真値
+    return (cni_beam_avg, cni_all, beam_radius_def, carrier, noise, interference)  # 真値
 
 
 # ビーム範囲内(ビームの中心からbeam_radius[km]以内)のポイントをリスト化して返す
@@ -290,26 +293,30 @@ def mean_cni(beam_num, dBm_C):
 
 
 # cniの強弱図を出力
-def plot_cni(ci, beam_num, iter):
-    #       freqField[REPEATED_BEAM][ビーム数][gb, xy][latitude][longitude]
-    point = freqField[iter][beam_num][1]
+def plot_cni(cni_all, carrier):
 
-    BX, BY = np.meshgrid(POINT_X, POINT_Y)
-    fig = plt.figure(figsize=(10.24, 7.68))
-    ax = fig.add_subplot(111)
-    plt.pcolormesh(BX, BY, ci, cmap="gist_ncar")
-    plt.colorbar(orientation='vertical')
-    x1 = point[0][0] - DOWNLINK_LOSS
-    x2 = point[0][0] + DOWNLINK_LOSS
-    y1 = point[1][0] - DOWNLINK_LOSS
-    y2 = point[1][0] + DOWNLINK_LOSS
-    poly = plt.Polygon(((x1, y1), (x1, y2), (x2, y2), (x2, y1)), fill=False)
-    ax.add_patch(poly)
-    plt.xlabel("POINT_X[km]")
-    plt.ylabel("POINT_Y[km]")
+    for beam_num in range(1):
+    # for beam_num in range(num_of_beam):
+        iter = determ_freq(freq_beam_list, beam_num)
+        #       freqField[REPEATED_BEAM][ビーム数][gb, xy][latitude][longitude]
+        point = freqField[iter][beam_num][1]
+
+        BX, BY = np.meshgrid(POINT_X, POINT_Y)
+        fig = plt.figure(figsize=(10.24, 7.68))
+        ax = fig.add_subplot(111)
+        plt.pcolormesh(BX, BY, cni_all[beam_num], cmap="gist_ncar")
+        plt.colorbar(orientation='vertical')
+        x1 = point[0][0] - DOWNLINK_LOSS
+        x2 = point[0][0] + DOWNLINK_LOSS
+        y1 = point[1][0] - DOWNLINK_LOSS
+        y2 = point[1][0] + DOWNLINK_LOSS
+        poly = plt.Polygon(((x1, y1), (x1, y2), (x2, y2), (x2, y1)), fill=False)
+        ax.add_patch(poly)
+        plt.xlabel("POINT_X[km]")
+        plt.ylabel("POINT_Y[km]")
 
 
-def calc_bitrate(cni, iter, printf):
+def calc_bitrate(cni, iter, this_sat_radius):
 
     # 通信方式      [   QPSK1/2, QPSK3/5, QPSK3/4, QPSK5/6, 8PSK2/3, 8PSK5/6, 16APSK3/4, 16APSK8/9, 32APSK4/5, 32APSK9/10]
     # 必要なcni     [0, 1.4    , 2.7    , 4.6    , 5.6    , 7.4    , 10.0   , 11.2     , 13.8     , 15.8     , 19.5      ]
@@ -326,14 +333,13 @@ def calc_bitrate(cni, iter, printf):
         if beam_bps_per_Hz[beam_num] < 0: beam_bps_per_Hz[beam_num] = 0
         beam_bps.append(beam_bps_per_Hz[beam_num] * bandwidth[determ_freq(freq_beam_list, beam_num)])
 
-    bps_person_list_num.append([num, freq_beam_list, iter, cni_mean, bps_per_Hz, sum(beam_bps), sum(beam_user)])
+    bps_person_list_num.append([this_sat_radius, freq_beam_list, iter, cni_mean, bps_per_Hz, sum(beam_bps), sum(beam_user)])
     result_output_num(iter, cni_mean, beam_bps, beam_cni_db, beam_bps_per_Hz, bps_per_Hz)
     result_output(iter, cni_mean, beam_bps, beam_cni_db, beam_bps_per_Hz, bps_per_Hz)
     
     # if printf: print(f"num {num}, iter: {iter}, cni: {np.round(cni_mean, 12)}[dB], {bps_per_Hz}[bps/Hz], {sum(beam_bps):,}[bps], power : {power} band : {bandwidth}")
     if printf: 
-        if iter % 1000 == 0 :
-            print(f"iter: {iter}, cni: {np.round(cni_mean, 3)}[dB], {np.round(bps_per_Hz, 3)}[bps/Hz], {sum(beam_bps):,}[bps], power : {power}")
+        print(f"rad : {sat_radius}m, iter: {iter}, cni: {np.round(cni_mean, 3)}[dB], {np.round(bps_per_Hz, 3)}[bps/Hz], {sum(beam_bps):,}[bps],  {sum(beam_user)}[人]")
 
     return beam_bps
 
@@ -346,33 +352,45 @@ def calc_bps_max(iter):
 
 
 def main(start_end_list) :
-    global power_list, bps_person_max, power, process_num, output_time, output_path, iter_start, iter_end
+    global bps_person_max, power, process_num, output_time, output_path, cni_data
+    global sat_radius, dist_from_center, dist_from_center_x, dist_from_center_y, beam_radius, center_dist_list, beam_user, start_sat_radius, end_sat_radius
 
-    power_list    = start_end_list[0]
-    process_num   = start_end_list[1]
-    iter_start    = start_end_list[2]
-    iter_end      = start_end_list[3]
-    output_time   = start_end_list[4]
-    output_path   = start_end_list[5]
+    process_num   = start_end_list[0]
+    start_sat_radius    = start_end_list[1]
+    end_sat_radius      = start_end_list[2]
+    output_time   = start_end_list[3]
+    output_path   = start_end_list[4]
 
-    print(f'プロセス{process_num} 開始 : {setup_time}, {iter_start}から{iter_end}まで | power_list mem :{power_list.memory_usage(deep=True).sum() / 1024 ** 1} KB')
+    print(f'プロセス{process_num} 開始 : {setup_time}, {start_sat_radius}から{end_sat_radius}まで')
 
+    for this_sat_radius in range(start_sat_radius, end_sat_radius, 1) :
+        sat_radius          = [this_sat_radius/10] * num_of_beam
+        dist_from_center    = add_beam(beam_center, sat_radius)
+        dist_from_center_x  = dist_from_center[0]
+        dist_from_center_y  = dist_from_center[1]
+        beam_radius         = calc_cni(power, bandwidth)[2]
+        center_dist_list    = pref_beam_distance()
+        beam_user = np.round(np.array(user_count()))
 
-    for iter in range(iter_start, iter_end):
-    # for iter in kari_list:
-        power = power_list.loc[iter].values.tolist()
-        cni = calc_cni(power, bandwidth)[0]
-        calc_bitrate(cni, iter, printf)
-        bps_person_max = calc_bps_max(iter - iter_start)
+        cni_data = calc_cni(power, bandwidth)
+        cni = cni_data[0]
+        calc_bitrate(cni, this_sat_radius, this_sat_radius)
+        # bps_person_max = calc_bps_max(this_sat_radius - start_sat_radius)
+
+        if cni_plot:
+            plot_cni(cni_data[1], cni_data[3])
+
 
     print(f"プロセス{process_num} 終了 : {time.time() - runtime}")
-    plt.show()
+    # plt.show()
 
 
 
 
-num = 180
-circle  = pd.read_csv("database\\beam_list_" + str(num) + "km.csv")
+# num = 180
+# circle  = pd.read_csv("database\\beam_list_" + str(num) + "km.csv")
+# circle  = pd.read_csv("database\\beam_list_180km.csv")
+circle  = pd.read_csv("database\\beam_list_sea_flight.csv")
 
 power               = list()
 freqField           = dict()   # 角周波数ごとにビームを入れる辞書
@@ -388,19 +406,22 @@ for iter in range(REPEATED_BEAM):
 num_of_beam         = beam_count()[0]
 beam_center         = beam_count()[1]
 freq_beam_list      = beam_freq()
-# power_list          = decision_power_from_csv()
+
+power               = initial_power()
 bandwidth           = initial_bandwidth()
-beam_radius         = initial_beam_radius()
-sat_radius          = initial_sat_radius()
-center_dist_list    = pref_beam_distance()
+# sat_radius          = initial_sat_radius()
 
-dist_from_center    = add_beam(beam_center, sat_radius, plot=False)
-dist_from_center_x  = dist_from_center[0]
-dist_from_center_y  = dist_from_center[1]
-iter_start          = 0
-iter_end            = 0
+# dist_from_center    = add_beam(beam_center, sat_radius, plot=False)
+# dist_from_center_x  = dist_from_center[0]
+# dist_from_center_y  = dist_from_center[1]
 
-beam_user = np.round(np.array(user_count()) / 60)
+# beam_radius         = calc_cni(power, bandwidth)[2]
+# center_dist_list    = pref_beam_distance()
+
+# iter_start          = 0
+# iter_end            = 0
+
+# beam_user = np.round(np.array(user_count()) / 60)
 setup_time = time.time() - runtime
 
 if __name__ == '__main__':
@@ -411,9 +432,28 @@ if __name__ == '__main__':
         output_path = "Result\\Result_" + output_time
         os.mkdir(output_path)
 
-    power_list = pd.read_csv("database\\decision_power_8_0927-115200.csv", dtype=np.float16)
-    main([power_list, 0, 0, len(power_list), output_time, output_path])
-    print(f"実行時間 : {time.time() - runtime - setup_time}")
+    start_sat_radius = 10 # 0.1m
+    end_sat_radius   = 301 # 0.1m
+
+    main([0, start_sat_radius, end_sat_radius, output_time, output_path])
+
+    # for this_sat_radius in range(start_sat_radius, end_sat_radius, 10) :
+        # sat_radius          = [this_sat_radius/10] * num_of_beam
+        # print(sat_radius)
+        # dist_from_center    = add_beam(beam_center, sat_radius)
+        # dist_from_center_x  = dist_from_center[0]
+        # dist_from_center_y  = dist_from_center[1]
+        # beam_radius         = calc_cni(power, bandwidth)[2]
+        # center_dist_list    = pref_beam_distance()
+        # beam_user = np.round(np.array(user_count()))
+
+        # power_list = pd.read_csv("database\\decision_power_8_0927-115200.csv", dtype=np.float16)
+        # power_list = power
+        # main([power, 0, this_sat_radius, this_sat_radius+1, output_time, output_path])
+        # print(f"実行時間 : {time.time() - runtime - setup_time}")
+
+    plt.show()
+
 
 
 # print(len(freqField[0][0][0][0]))  # longitude
