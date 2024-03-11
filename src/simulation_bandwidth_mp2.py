@@ -6,36 +6,12 @@ import csv
 import os
 import time
 import datetime
-import geopandas as gpd
 from geopy.distance import geodesic
 
 runtime   = time.time()
+pref_list = pd.read_csv("database\\jinko_list_sityoson.csv")
 # circle  = pd.read_csv("database\\beam_list_180km.csv")
-
-
-circlelist = ["database\\beam_list_ship_180.csv", 
-              "database\\beam_list_ship_120.csv",
-              "database\\beam_list_ship_60.csv",
-              "database\\beam_list_ship_45.csv",
-              "database\\beam_list_flight_180.csv",
-              "database\\beam_list_flight_120.csv",
-              "database\\beam_list_flight_60.csv",
-              "database\\beam_list_flight_45.csv"]
-
-outputcirclelist = ["ship_180km", 
-                    "ship_120km", 
-                    "ship_60km", 
-                    "ship_45km", 
-                    "air_180km", 
-                    "air_120km", 
-                    "air_60km", 
-                    "air_45km"]
-
-
-currentlist = 4
-
-circle  = pd.read_csv(circlelist[currentlist])
-
+circle  = pd.read_csv("database\\beam_list_flight_45.csv")
 
 
 C                = 299792458  # 光速[m/s]
@@ -52,10 +28,10 @@ TOTAL_POWER      = 5                #[W]
 REPEATED_BEAM    = 3
 KAISU            = 100
 
-output_csv       = False
+output_csv       = True
 printf           = True
 random_param     = False
-cni_plot         = True
+cni_plot         = False
 
 # CENTER  = [30, 128]
 CENTER  = [20, 122]
@@ -78,23 +54,22 @@ def result_output_num(iter, cni_mean, beam_bps, beam_cni_db, beam_bps_per_Hz, bp
     if not output_csv:
         return
 
-    filename = output_path + "\\result_all_" + str(outputcirclelist[currentlist]) + "_" + output_time + "_" + str(process_num) +".csv"
-    # filename = output_path + "\\result_all_" + str(num_of_beam) + "beam_" + output_time + "_" + str(process_num) +".csv"
+    filename = output_path + "\\result_all_" + str(num_of_beam) + "beam_" + output_time + "_" + str(process_num) +".csv"
     mode = 'w' if iter == start_sat_radius else 'a'
 
     with open(filename, mode, newline='') as f:
         writer = csv.writer(f)
-        header = ["iter", "iter", "beam_num", "band", "power[W]", "bandwidth[Hz]", "beam_cni_db[dB]", "beam_bps_per_Hz", "bitrate[beam_bps]", "latitude", "longitude", "sat_radius", "beam_radius", "carrier", "interference"]
+        header = ["iter", "iter", "beam_num", "band", "power[W]", "bandwidth[Hz]", "beam_cni_db[dB]", "beam_bps_per_Hz", "bitrate[beam_bps]", "latitude", "longitude", "sat_radius", "beam_radius", "user"]
         writer.writerow(header)
 
-        #      ["iter", "iter", "beam_num", "band", "power[W]", "bandwidth[Hz]", "beam_cni_db[dB]", "beam_bps_per_Hz", "bitrate[beam_bps]", "latitude", "longitude", "sat_radius", "beam_radius", "carrier"                , "interference"]
-        data = [iter  , ""    , ""        , ""    , sum(power), sum(bandwidth) , cni_mean         , bps_per_Hz       , sum(beam_bps)      , ""        , ""         , ""          , ""           , dBm(np.mean(cni_data[3])), dBm(np.mean(cni_data[4]))]
+        #      ["iter", "iter", "beam_num", "band", "power[W]", "bandwidth[Hz]", "beam_cni_db[dB]", "beam_bps_per_Hz", "bitrate[beam_bps]", "latitude", "longitude", "sat_radius", "beam_radius", "user"]
+        data = [iter  , ""    , ""        , ""    , sum(power), sum(bandwidth) , cni_mean         , bps_per_Hz       , sum(beam_bps)      , ""        , ""         , ""          , ""           , sum(beam_user)]
         writer.writerow(data)
 
         for beam_num in range(num_of_beam):
             freq_num = determ_freq(freq_beam_list, beam_num)
-            #      [iter, iter, beam_num, freq_num, power[W]       , bandwidth[Hz]      , beam_cni_db[dB]      , beam_bps_per_Hz          , bitrate[beam_bps] , latitude                , longitude               , sat_radius          , beam_radius          ,  carrier                   ,interference]
-            data = [""  , iter, beam_num, freq_num, power[beam_num], bandwidth[freq_num], beam_cni_db[beam_num], beam_bps_per_Hz[beam_num], beam_bps[beam_num], beam_center[beam_num][0], beam_center[beam_num][1], sat_radius[beam_num], cni_data[2][beam_num],  dBm(cni_data[3][beam_num]), dBm(cni_data[4][beam_num])]
+            #      [iter, iter, beam_num, freq_num, power[W]       , bandwidth[Hz]      , beam_cni_db[dB]      , beam_bps_per_Hz          , bitrate[beam_bps] , latitude                , longitude               , sat_radius          , beam_radius          , user]
+            data = [""  , iter, beam_num, freq_num, power[beam_num], bandwidth[freq_num], beam_cni_db[beam_num], beam_bps_per_Hz[beam_num], beam_bps[beam_num], beam_center[beam_num][0], beam_center[beam_num][1], sat_radius[beam_num], beam_radius[beam_num], beam_user[beam_num]]
             writer.writerow(data)
 
         writer.writerow("")
@@ -113,7 +88,7 @@ def result_output(iter, cni_mean, beam_bps, beam_cni_db, beam_bps_per_Hz, bps_pe
             header = ["iter", "power[W]", "bandwidth[Hz]", "cni[dB]", "bps_per_Hz", "bitrate[beam_bps]", "user"]
             writer.writerow(header)
 
-        data = [iter, power, bandwidth, cni_mean, bps_per_Hz, sum(beam_bps)]
+        data = [iter, power, bandwidth, cni_mean, bps_per_Hz, sum(beam_bps), sum(beam_user)]
         writer.writerow(data)
 
 
@@ -124,6 +99,43 @@ def beam_count():
         beam_center.append([circle["latitude"][beam_num], circle["longitude"][beam_num]])
 
     return len(circle), beam_center
+
+
+# 市町村役場所在地から各ビームの中心までの距離を計算し､beam_radius[km]以内ならcenter_dist_listに追加して返す
+def pref_beam_distance():
+    center_dist_list = list()
+
+    for pref in range(len(pref_list)): # 市町村の数(沖縄除く)
+        beam_center_dist_x = [
+            geodesic(beam_center[beam_num], [beam_center[beam_num][0], pref_list['経度'][pref]]).km
+            for beam_num in range(num_of_beam)
+        ]
+        beam_center_dist_y = [
+            geodesic(beam_center[beam_num], [pref_list['緯度'][pref], beam_center[beam_num][1]]).km
+            for beam_num in range(num_of_beam)
+        ]
+        beam_center_dist = np.sqrt(np.array(beam_center_dist_x) ** 2 + np.array(beam_center_dist_y) ** 2)
+        beam_overlap_list = sum(1 for i, dist in enumerate(beam_center_dist) if dist <= beam_radius[i])
+
+        center_dist_list.extend([
+            [pref_list['自治体'][pref], int(pref_list['人口'][pref]), beam_num, beam_overlap_list, x, y]
+            for beam_num, x, y in zip(range(num_of_beam), beam_center_dist_x, beam_center_dist_y)
+            if beam_center_dist[beam_num] <= beam_radius[beam_num]
+        ])
+
+    return center_dist_list
+
+
+# 各ビームのユーザ数を計算して返す
+def user_count():
+    pref_user = [center_dist[1] / center_dist[3] for center_dist in center_dist_list]   # 各都道府県の人口を都道府県庁所在地がある場所の範囲内のビームの数だけ割って足す(1ユーザが2ビームで通信されないようにする)
+    beam_user = [0] * num_of_beam
+
+    for i, center_dist in enumerate(center_dist_list):
+        beam_user[center_dist[2]] += pref_user[i]
+
+    beam_user = [round(user) for user in beam_user]
+    return beam_user
 
 
 def beam_freq():
@@ -197,8 +209,7 @@ def mW(dBm_value):
 
 def add_beam(beam_center, sat_radius):
 
-    # freqField[REPEATED_BEAM][ビーム数][0=gb]
-    # freqField[REPEATED_BEAM][ビーム数][1=xy][longitude][latitude]
+    # freqField[REPEATED_BEAM][ビーム数][gb, xy][latitude][longitude]
     dist_from_center_x = list()
     dist_from_center_y = list()
 
@@ -206,8 +217,8 @@ def add_beam(beam_center, sat_radius):
         freqField[iter] = list()
 
     for beam_num in range(num_of_beam):
-        dist_from_center_x.append([geodesic(CENTER, [CENTER[0], beam_center[beam_num][1]]).km]) #longitude
-        dist_from_center_y.append([geodesic(CENTER, [beam_center[beam_num][0], CENTER[1]]).km]) #latitude
+        dist_from_center_x.append([geodesic(CENTER, [CENTER[0], beam_center[beam_num][1]]).km])
+        dist_from_center_y.append([geodesic(CENTER, [beam_center[beam_num][0], CENTER[1]]).km])
         freq_num = determ_freq(freq_beam_list, beam_num)
         gb   = beam_gain(START_BANDWIDTH, (dist_from_center_x[beam_num], dist_from_center_y[beam_num]), beam_num, sat_radius)
         freqField[freq_num].append([gb, [dist_from_center_x[beam_num], dist_from_center_y[beam_num]]])
@@ -234,24 +245,19 @@ def beam_gain(freq, dist_from_center, beam_num, sat_radius):
 # 各ビームの範囲内のcni(=cni_beam_avg)と全範囲のcniを返す
 def calc_cni(power, bandwidth):
     cni_beam_avg = list()
-    cni_all_dB      = list()
+    cni_all      = list()
     beam_radius_def  = list()
     carrier          = list()
-    carrier_in_beam = list()
-    carrier_all_db = list()
     interference     = list()
-    interference_in_beam = list()
-    interference_all_db = list()
 
     for beam_num in range(num_of_beam):
         cni_in_beam      = list()
         cni_in_beam_dist = list()
-        carrier_this_beam     = list()
-        interference_this_beam     = list()
 
         freq_num = determ_freq(freq_beam_list, beam_num)
-        carrier.append(power[beam_num]*1000 * freqField[freq_num][beam_num][0] * dl_mw)   # freqField[REPEATED_BEAM][beam_num][gb]
+        carrier.append(power[beam_num]*1000 * freqField[freq_num][beam_num][0] * dl_mw)   # freqField[REPEATED_BEAM][beam_num][gb, xy][latitude][longitude]
         noise = 4.3649399999999995e-18 * bandwidth[freq_num]                                    # (1.38 * 10**(-23)) * 316.3 * bandwidth[freq_num] * 1000
+
 
         # CI比を知りたいビーム以外のビームを干渉電力として加算しまくる．
         interference.append(sum(
@@ -260,36 +266,30 @@ def calc_cni(power, bandwidth):
         ))
 
         # points_in_beam[len][x, y, dist]
-        points_in_beam = in_beam_tf(beam_num, dBm(carrier[beam_num]))
-        cni_all = carrier[beam_num] / (noise + interference[beam_num])
-        cni_all_dB.append(dBm(cni_all))
-        carrier_all_db.append(dBm(carrier[beam_num]))
-        interference_all_db.append(dBm(interference[beam_num]))
-
-        print(    noise ,     np.mean(interference[beam_num]) ,     np.mean(noise + interference[beam_num]),
-              dBm(noise), dBm(np.mean(interference[beam_num])), dBm(np.mean(noise + interference[beam_num])))
+        points_in_beam = mean_cni(beam_num, dBm(carrier[beam_num]))
+        total_cni = carrier[beam_num] / (noise + interference[beam_num])
+        cni_all.append(dBm(total_cni))
 
 
         for i in range(len(points_in_beam)):
-            cni_in_beam.append(cni_all[points_in_beam[i][0]][points_in_beam[i][1]])
+            cni_in_beam.append(total_cni[points_in_beam[i][0]][points_in_beam[i][1]])
             cni_in_beam_dist.append(points_in_beam[i][2])
-            carrier_this_beam.append(carrier[beam_num][points_in_beam[i][0]][points_in_beam[i][1]])
-            interference_this_beam.append(interference[beam_num][points_in_beam[i][0]][points_in_beam[i][1]])
 
         beam_radius_def.append(max(cni_in_beam_dist))
         cni_beam_avg.append(np.mean(cni_in_beam))
-        carrier_in_beam.append(sum(carrier_this_beam))
-        interference_in_beam.append(sum(interference_this_beam))
+    
+    print(len(carrier), len(interference))
 
-    return (cni_beam_avg, cni_all_dB, beam_radius_def, carrier_in_beam, interference_in_beam, carrier_all_db, interference_all_db)  # 真数, 対数, 真数, 真数, 真数
+    return (cni_beam_avg, cni_all, beam_radius_def, carrier, noise, interference)  # 真値
+
 
 # ビーム範囲内(ビームの中心からbeam_radius[km]以内)のポイントをリスト化して返す
-def in_beam_tf(beam_num, dBm_C):
+def mean_cni(beam_num, dBm_C):
     points_in_beam = list()
     beam_edge = np.max(dBm_C) - 3
 
-    dist_x = dist_from_center[0][beam_num][0] - mesh_x
-    dist_y = dist_from_center[1][beam_num][0] - mesh_y
+    dist_x = dist_from_center_x[beam_num][0] - mesh_x
+    dist_y = dist_from_center_y[beam_num][0] - mesh_y
     dist   = np.sqrt(dist_x ** 2 + dist_y ** 2)
 
     x_coords, y_coords = np.where(dBm_C >= beam_edge)   # dBm_Cがbeam_edgeより高ければTrue､低ければFalseを返す(ビーム範囲をTFで返す)
@@ -299,21 +299,25 @@ def in_beam_tf(beam_num, dBm_C):
 
 
 # cniの強弱図を出力
-def plot_cni():
-    df = gpd.read_file('japan.geojson')
+def plot_cni(cni_all, carrier):
 
-    for _ in range(1):
-        beam_num = 2
-    # for beam_num in range(num_of_beam):
+    # for beam_num in range(1):
+    for beam_num in range(num_of_beam):
+        freq_num = determ_freq(freq_beam_list, beam_num)
+        #       freqField[REPEATED_BEAM][ビーム数][gb, xy][latitude][longitude]
+        point = freqField[freq_num][beam_num][1]
+
         BX, BY = np.meshgrid(POINT_X, POINT_Y)
         fig = plt.figure(figsize=(10.24, 7.68))
-        ax1 = fig.add_subplot(111)
-        plt.pcolormesh(BX, BY, cni_data[6][beam_num], cmap="CMRmap")
+        ax = fig.add_subplot(111)
+        plt.pcolormesh(BX, BY, cni_all[beam_num], cmap="gist_ncar")
         plt.colorbar(orientation='vertical')
-        plt.clim(-120, -100)
-        # plt.clim(-20, 10)
-        df.plot(ax = ax1, edgecolor='#444', facecolor='white', linewidth = 0.5, aspect="equal")
-
+        x1 = point[0][0] - DOWNLINK_LOSS
+        x2 = point[0][0] + DOWNLINK_LOSS
+        y1 = point[1][0] - DOWNLINK_LOSS
+        y2 = point[1][0] + DOWNLINK_LOSS
+        poly = plt.Polygon(((x1, y1), (x1, y2), (x2, y2), (x2, y1)), fill=False)
+        ax.add_patch(poly)
         plt.xlabel("POINT_X[km]")
         plt.ylabel("POINT_Y[km]")
 
@@ -335,43 +339,57 @@ def calc_bitrate(cni, iter, this_sat_radius):
         if beam_bps_per_Hz[beam_num] < 0: beam_bps_per_Hz[beam_num] = 0
         beam_bps.append(beam_bps_per_Hz[beam_num] * bandwidth[determ_freq(freq_beam_list, beam_num)])
 
-    bps_person_list_num.append([this_sat_radius, freq_beam_list, iter, cni_mean, bps_per_Hz, sum(beam_bps), ])
+    bps_person_list_num.append([this_sat_radius, freq_beam_list, iter, cni_mean, bps_per_Hz, sum(beam_bps), sum(beam_user)])
     result_output_num(iter, cni_mean, beam_bps, beam_cni_db, beam_bps_per_Hz, bps_per_Hz)
-    # result_output(iter, cni_mean, beam_bps, beam_cni_db, beam_bps_per_Hz, bps_per_Hz)
+    result_output(iter, cni_mean, beam_bps, beam_cni_db, beam_bps_per_Hz, bps_per_Hz)
     
     # if printf: print(f"num {num}, iter: {iter}, cni: {np.round(cni_mean, 12)}[dB], {bps_per_Hz}[bps/Hz], {sum(beam_bps):,}[bps], power : {power} band : {bandwidth}")
     if printf: 
-        print(f"rad : {sat_radius[0]}m, cni: {np.round(cni_mean, 3)}[dB], {np.round(bps_per_Hz, 3)}[bps/Hz], {sum(beam_bps):,}[bps], carrier:{dBm(np.mean(cni_data[3]))}[dB], interference:{dBm(np.mean(cni_data[4]))}[dB]")
+        print(f"rad : {sat_radius}m, iter: {iter}, cni: {np.round(cni_mean, 3)}[dB], {np.round(bps_per_Hz, 3)}[bps/Hz], {sum(beam_bps):,}[bps],  {sum(beam_user)}[人]")
 
         for beam_num in range(num_of_beam):
             freq_num = determ_freq(freq_beam_list, beam_num)
-            print(f"beam_num:{beam_num}, band:{freq_num}, power:{power[beam_num]}, bandwidth:{bandwidth[freq_num]}, cni:{beam_cni_db[beam_num]}, bps/Hz:{beam_bps[beam_num]}, beam:{beam_center[beam_num]}, sat_rad:{sat_radius[beam_num]}, beam_rad:{cni_data[2][beam_num]}, carrier:{dBm(cni_data[3][beam_num])}, interference:{dBm(cni_data[4][beam_num])}")
+            print(f"beam_num:{beam_num}, band:{freq_num}, power:{power[beam_num]}, bandwidth:{bandwidth[freq_num]}, cni:{beam_cni_db[beam_num]}, bps/Hz:{beam_bps[beam_num]}, beam:{beam_center[beam_num]}, sat_rad:{sat_radius[beam_num]}, beam_rad:{beam_radius[beam_num]}")
 
 
     return beam_bps
 
 
+def calc_bps_max(iter):
+    if bps_person_max[5] <= bps_person_list_num[iter][5]:
+        return bps_person_list_num[iter]
+    else:
+        return bps_person_max
+
+
 def main(start_end_list) :
     global bps_person_max, power, process_num, output_time, output_path, cni_data
-    global sat_radius, dist_from_center, start_sat_radius, end_sat_radius
+    global sat_radius, dist_from_center, dist_from_center_x, dist_from_center_y, beam_radius, center_dist_list, beam_user, start_sat_radius, end_sat_radius
 
-    process_num         = start_end_list[0]
+    process_num   = start_end_list[0]
     start_sat_radius    = start_end_list[1]
     end_sat_radius      = start_end_list[2]
-    output_time         = start_end_list[3]
-    output_path         = start_end_list[4]
+    output_time   = start_end_list[3]
+    output_path   = start_end_list[4]
 
     print(f'プロセス{process_num} 開始 : {setup_time}, {start_sat_radius}から{end_sat_radius}まで')
 
     for this_sat_radius in range(start_sat_radius, end_sat_radius, 1) :
         sat_radius          = [this_sat_radius/10] * num_of_beam
         dist_from_center    = add_beam(beam_center, sat_radius)
-        cni_data            = calc_cni(power, bandwidth)
-        
-        calc_bitrate(cni_data[0], this_sat_radius, this_sat_radius)
+        dist_from_center_x  = dist_from_center[0]
+        dist_from_center_y  = dist_from_center[1]
+        beam_radius         = calc_cni(power, bandwidth)[2]
+        center_dist_list    = pref_beam_distance()
+        beam_user = np.round(np.array(user_count()))
+
+        cni_data = calc_cni(power, bandwidth)
+        cni = cni_data[0]
+        calc_bitrate(cni, this_sat_radius, this_sat_radius)
+        # bps_person_max = calc_bps_max(this_sat_radius - start_sat_radius)
 
         if cni_plot:
-            plot_cni()
+            plot_cni(cni_data[1], cni_data[3])
 
 
     print(f"プロセス{process_num} 終了 : {time.time() - runtime}")
@@ -392,11 +410,24 @@ for iter in range(REPEATED_BEAM):
         freqField[iter] = list()
 
 num_of_beam         = beam_count()[0]
-beam_center         = beam_count()[1] #[latitude, longitude]
+beam_center         = beam_count()[1]
 freq_beam_list      = beam_freq()
 
 power               = initial_power()
 bandwidth           = initial_bandwidth()
+# sat_radius          = initial_sat_radius()
+
+# dist_from_center    = add_beam(beam_center, sat_radius, plot=False)
+# dist_from_center_x  = dist_from_center[0]
+# dist_from_center_y  = dist_from_center[1]
+
+# beam_radius         = calc_cni(power, bandwidth)[2]
+# center_dist_list    = pref_beam_distance()
+
+# iter_start          = 0
+# iter_end            = 0
+
+# beam_user = np.round(np.array(user_count()) / 60)
 setup_time = time.time() - runtime
 
 if __name__ == '__main__':
@@ -404,20 +435,14 @@ if __name__ == '__main__':
     if output_csv:
         now         = datetime.datetime.now()
         output_time = now.strftime("%m%d-%H%M%S")
-        # output_path = "Result\\Result_" + output_time
-        output_path = "Result\\Result_ship_and_flight"
-        # os.mkdir(output_path)
+        output_path = "Result\\Result_" + output_time
+        os.mkdir(output_path)
 
     start_sat_radius = 10 # 0.1m
     end_sat_radius   = 301 # 0.1m
 
-  
-    main([0, circle["sat_radius"][0]*10, circle["sat_radius"][0]*10+1, output_time, output_path])
-
-
-
-
     # main([0, start_sat_radius, end_sat_radius, output_time, output_path])
+    main([0, circle["sat_radius"][0]*10, circle["sat_radius"][0]*10+1, output_time, output_path])
 
     # for this_sat_radius in range(start_sat_radius, end_sat_radius, 10) :
         # sat_radius          = [this_sat_radius/10] * num_of_beam
